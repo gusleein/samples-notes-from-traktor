@@ -20,6 +20,9 @@ Usage:
     # игнорировать backup/ папки явно (включено по умолчанию, флаг отключает):
     python stamp_key.py /path/to/samples --no-skip-backup
 
+    # выполнить без создания backup/ — переименование без копии оригинала:
+    python stamp_key.py /path/to/samples --no-backup
+
 Плейсхолдеры в --pattern:
     @key   — тональность (напр. F#)
     @bpm   — BPM округлённый до целого (напр. 138)
@@ -180,7 +183,7 @@ def backup_file(path: Path, dry_run: bool) -> Optional[Path]:
 
 def run(directory: str, collection_data: dict, pattern: str, sep: str,
         prepend: bool, dry_run: bool, skip_backup: bool,
-        number: bool, num_width: int):
+        number: bool, num_width: int, no_backup: bool):
 
     files = sorted(find_audio_files(directory, skip_backup), key=lambda p: str(p))
     if not files:
@@ -209,14 +212,16 @@ def run(directory: str, collection_data: dict, pattern: str, sep: str,
         new_path  = path.parent / new_name
 
         prefix = '[DRY-RUN] ' if dry_run else ''
-        print(f"{prefix}{path.name}  →  {new_name}  (backup: backup/{path.name})")
+        backup_note = '' if no_backup else f"  (backup: backup/{path.name})"
+        print(f"{prefix}{path.name}  →  {new_name}{backup_note}")
 
         if not dry_run:
-            backed_up = backup_file(path, dry_run=False)
-            if backed_up is None:
-                print(f"  SKIP: не удалось создать backup для {path.name}", file=sys.stderr)
-                errors += 1
-                continue
+            if not no_backup:
+                backed_up = backup_file(path, dry_run=False)
+                if backed_up is None:
+                    print(f"  SKIP: не удалось создать backup для {path.name}", file=sys.stderr)
+                    errors += 1
+                    continue
             try:
                 path.rename(new_path)
                 tagged += 1
@@ -278,7 +283,9 @@ def main():
                         help='Добавить BPM — эквивалент --pattern "@key @bpm" '
                              '(игнорируется если задан --pattern)')
     parser.add_argument('--no-skip-backup', action='store_true',
-                        help='Не пропускать файлы внутри backup/ директорий')
+                        help='Не пропускать файлы внутри backup/ директорий при сканировании')
+    parser.add_argument('--no-backup', action='store_true',
+                        help='Не создавать backup/ — переименовывать файлы напрямую, без копии оригинала')
     parser.add_argument('--number', action='store_true',
                         help='Добавить порядковый номер @num в паттерн (сохраняет исходный '
                              'алфавитный порядок файлов). Если --pattern не задан явно, '
@@ -316,7 +323,7 @@ def main():
     print(f"Треков    : {len(data)}\n")
 
     run(args.directory, data, pattern, args.sep, args.prepend, args.dry_run,
-        skip_backup, args.number, args.num_width)
+        skip_backup, args.number, args.num_width, args.no_backup)
 
 
 if __name__ == '__main__':
